@@ -8,6 +8,9 @@ import { Calendar, Clock, Scissors } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useUserRole } from "@/hooks/useUserRole";
+import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
+import { BarberDashboard } from "@/components/dashboard/BarberDashboard";
 
 interface Booking {
   id: string;
@@ -28,6 +31,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { role, loading: roleLoading } = useUserRole(user?.id);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -130,6 +134,47 @@ const Dashboard = () => {
   const pastBookings = bookings.filter(
     (b) => b.status === "completed" || new Date(b.scheduled_time) < new Date()
   );
+
+  if (loading || roleLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar user={user} />
+        <div className="container mx-auto px-4 pt-24 pb-16">
+          <p className="text-center">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (role === 'admin') {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar user={user} />
+        <div className="container mx-auto px-4 pt-24 pb-16">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold mb-2">Admin Dashboard</h1>
+            <p className="text-muted-foreground">Manage bookings, queue, and user roles</p>
+          </div>
+          <AdminDashboard />
+        </div>
+      </div>
+    );
+  }
+
+  if (role === 'barber') {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar user={user} />
+        <div className="container mx-auto px-4 pt-24 pb-16">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold mb-2">Barber Dashboard</h1>
+            <p className="text-muted-foreground">Manage your appointments and queue</p>
+          </div>
+          <BarberDashboard userId={user.id} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
