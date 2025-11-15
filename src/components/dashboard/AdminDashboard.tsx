@@ -64,25 +64,34 @@ export const AdminDashboard = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase
+      // First fetch all profiles
+      const { data: profiles, error: profileError } = await supabase
         .from("profiles")
-        .select(`
-          id,
-          user_id,
-          full_name,
-          user_roles(role)
-        `);
+        .select("id, user_id, full_name")
+        .order("full_name");
 
-      if (error) throw error;
-      
-      const usersWithRoles: UserWithRole[] = data?.map((u: any) => ({
-        id: u.user_id,
-        full_name: u.full_name,
-        role: (u.user_roles?.[0]?.role || 'customer') as 'customer' | 'barber' | 'admin'
-      })) || [];
+      if (profileError) throw profileError;
+
+      // Then fetch user roles for all users
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
+
+      if (rolesError) throw rolesError;
+
+      // Combine the data
+      const usersWithRoles: UserWithRole[] = profiles?.map((profile: any) => {
+        const userRole = roles?.find((r: any) => r.user_id === profile.user_id);
+        return {
+          id: profile.user_id,
+          full_name: profile.full_name,
+          role: (userRole?.role || 'customer') as 'customer' | 'barber' | 'admin'
+        };
+      }) || [];
       
       setUsers(usersWithRoles);
     } catch (error: any) {
+      console.error("Error fetching users:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
@@ -119,16 +128,37 @@ export const AdminDashboard = () => {
 
   const updateUserRole = async (userId: string, newRole: 'customer' | 'barber' | 'admin') => {
     try {
-      const { error } = await supabase
+      // First check if the user already has a role entry
+      const { data: existingRole, error: fetchError } = await supabase
         .from("user_roles")
-        .update({ role: newRole })
-        .eq("user_id", userId);
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+
+      let error;
+      if (existingRole) {
+        // Update existing role
+        const result = await supabase
+          .from("user_roles")
+          .update({ role: newRole })
+          .eq("user_id", userId);
+        error = result.error;
+      } else {
+        // Insert new role
+        const result = await supabase
+          .from("user_roles")
+          .insert({ user_id: userId, role: newRole });
+        error = result.error;
+      }
 
       if (error) throw error;
 
-      toast({ title: "Success", description: "User role updated" });
+      toast({ title: "Success", description: `User role updated to ${newRole}` });
       fetchUsers();
     } catch (error: any) {
+      console.error("Error updating user role:", error);
       toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   };
