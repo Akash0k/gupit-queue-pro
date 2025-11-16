@@ -313,15 +313,17 @@ const Dashboard = () => {
                               <div className="text-lg font-semibold text-primary mb-2">
                                 ₱{booking.service?.price}
                               </div>
-                              {booking.status === "pending" && (
+                              {!["cancelled", "completed"].includes(booking.status) && (
                                 <div className="flex gap-2">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleEditBooking(booking)}
-                                  >
-                                    Edit
-                                  </Button>
+                                  {booking.status === "pending" && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleEditBooking(booking)}
+                                    >
+                                      Edit
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="destructive"
                                     size="sm"
