@@ -2,9 +2,12 @@ import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Clock, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/hooks/useUserRole";
 
 interface QueueItem {
   id: string;
@@ -25,6 +28,7 @@ const Queue = () => {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { role } = useUserRole(user?.id);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -117,6 +121,31 @@ const Queue = () => {
     }
   };
 
+  const updateBookingStatus = async (bookingId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ status: newStatus as any })
+        .eq("id", bookingId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Status Updated",
+        description: "Booking status has been updated successfully",
+      });
+      fetchQueue();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const canManageQueue = role === "barber" || role === "admin";
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar user={user} />
@@ -191,18 +220,38 @@ const Queue = () => {
                       }`}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-1">
                           <div className="text-2xl font-bold text-primary">
                             #{item.queue_number || index + 1}
                           </div>
-                          <div>
+                          <div className="flex-1">
                             <div className="font-semibold">{item.profile?.full_name || "Customer"}</div>
                             <div className="text-sm text-muted-foreground">{item.service?.name}</div>
                           </div>
                         </div>
-                        <Badge className={getStatusColor(item.status)}>
-                          {getStatusText(item.status)}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          {canManageQueue ? (
+                            <Select
+                              value={item.status}
+                              onValueChange={(value) => updateBookingStatus(item.id, value)}
+                            >
+                              <SelectTrigger className="w-[140px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pending">Waiting</SelectItem>
+                                <SelectItem value="confirmed">Confirmed</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="completed">Completed</SelectItem>
+                                <SelectItem value="cancelled">Cancelled</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge className={getStatusColor(item.status)}>
+                              {getStatusText(item.status)}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1">

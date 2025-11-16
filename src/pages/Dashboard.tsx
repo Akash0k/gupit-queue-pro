@@ -11,6 +11,10 @@ import { format } from "date-fns";
 import { useUserRole } from "@/hooks/useUserRole";
 import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
 import { BarberDashboard } from "@/components/dashboard/BarberDashboard";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 interface Booking {
   id: string;
@@ -29,9 +33,20 @@ const Dashboard = () => {
   const [user, setUser] = useState<any>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingBooking, setEditingBooking] = useState<Booking | null>(null);
+  const [editDate, setEditDate] = useState<Date | undefined>(undefined);
+  const [editTime, setEditTime] = useState<string>("");
+  const [editNotes, setEditNotes] = useState<string>("");
   const navigate = useNavigate();
   const { toast } = useToast();
   const { role, loading: roleLoading } = useUserRole(user?.id);
+
+  const timeSlots = [
+    "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+    "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+    "15:00", "15:30", "16:00", "16:30", "17:00", "17:30",
+  ];
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -108,6 +123,54 @@ const Dashboard = () => {
       toast({
         title: "Error",
         description: error.message || "Failed to cancel booking",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditBooking = (booking: Booking) => {
+    setEditingBooking(booking);
+    setEditDate(new Date(booking.scheduled_time));
+    setEditTime(format(new Date(booking.scheduled_time), "HH:mm"));
+    setEditNotes(booking.notes || "");
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateBooking = async () => {
+    if (!editingBooking || !editDate || !editTime) {
+      toast({
+        title: "Error",
+        description: "Please select both date and time",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const [hours, minutes] = editTime.split(":").map(Number);
+      const scheduledDateTime = new Date(editDate);
+      scheduledDateTime.setHours(hours, minutes, 0, 0);
+
+      const { error } = await supabase
+        .from("bookings")
+        .update({
+          scheduled_time: scheduledDateTime.toISOString(),
+          notes: editNotes || null,
+        })
+        .eq("id", editingBooking.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Booking Updated",
+        description: "Your booking has been updated successfully",
+      });
+      setEditDialogOpen(false);
+      fetchBookings();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update booking",
         variant: "destructive",
       });
     }
@@ -251,13 +314,22 @@ const Dashboard = () => {
                                 ₱{booking.service?.price}
                               </div>
                               {booking.status === "pending" && (
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => handleCancelBooking(booking.id)}
-                                >
-                                  Cancel
-                                </Button>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditBooking(booking)}
+                                  >
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => handleCancelBooking(booking.id)}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -310,6 +382,70 @@ const Dashboard = () => {
           )}
         </div>
       </div>
+
+      {/* Edit Booking Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Booking</DialogTitle>
+            <DialogDescription>
+              Update your booking details. You can only edit pending bookings.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Date Selection */}
+            <div className="space-y-2">
+              <Label>Select Date</Label>
+              <CalendarComponent
+                mode="single"
+                selected={editDate}
+                onSelect={setEditDate}
+                disabled={(date) => date < new Date()}
+                className="rounded-md border"
+              />
+            </div>
+
+            {/* Time Selection */}
+            <div className="space-y-2">
+              <Label>Select Time</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {timeSlots.map((time) => (
+                  <Button
+                    key={time}
+                    variant={editTime === time ? "default" : "outline"}
+                    onClick={() => setEditTime(time)}
+                    className="w-full"
+                  >
+                    {time}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-notes">Notes (Optional)</Label>
+              <Textarea
+                id="edit-notes"
+                placeholder="Any special requests or notes..."
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateBooking}>
+              Update Booking
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
